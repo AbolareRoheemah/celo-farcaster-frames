@@ -3,7 +3,6 @@
 import dynamic from "next/dynamic";
 import type { Session } from "next-auth"
 import { SessionProvider } from "next-auth/react"
-import { RainbowKitProvider } from "@rainbow-me/rainbowkit";
 
 
 const WagmiProvider = dynamic(
@@ -17,9 +16,7 @@ export function Providers({ session, children }: { session: Session | null, chil
   return (
     <SessionProvider session={session}>
       <WagmiProvider>
-        <RainbowKitProvider>
           {children}
-        </RainbowKitProvider>
       </WagmiProvider>
     </SessionProvider>
   );

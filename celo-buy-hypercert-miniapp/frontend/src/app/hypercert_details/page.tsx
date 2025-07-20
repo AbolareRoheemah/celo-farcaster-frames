@@ -11,12 +11,15 @@ import { HypercertFull } from "../../lib/hypercert-full.fragment";
 import { useToast } from "../../hooks/use-toast";
 import { getHypercert } from "../../lib/getHypercert";
 import { useStore } from "../../lib/account-store";
+import { useAccount, useConnect, useDisconnect } from 'wagmi';
 
 export default function HypercertDetails() {
+  const [isConnecting, setIsConnecting] = useState(false);
+  const { isConnected, address } = useAccount();
+  const { connect, connectors } = useConnect();
+  const { disconnect } = useDisconnect();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const emitError = useStore((state: any) => state.error);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const emitHash = useStore((state: any) => state.hash);
   const { toast } = useToast();
   const [isSDKLoaded, setIsSDKLoaded] = useState(false);
   const [context, setContext] = useState<Context.FrameContext>();
@@ -28,9 +31,10 @@ export default function HypercertDetails() {
   const isProcessing = hypercert?.orders?.data?.length
     ? hypercert?.orders?.data?.[0]?.orderNonce === activeOrderNonce
     : false;
-  const [transactionHash, setTransactionHash] = useState<string | null>(null);
+  // const [transactionHash, setTransactionHash] = useState<string | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const address = useAccount();
 
   useEffect(() => {
     const load = async () => {
@@ -55,12 +59,6 @@ export default function HypercertDetails() {
       );
     }
   }, [emitError]);
-
-  useEffect(() => {
-    if (emitHash) {
-      setTransactionHash(emitHash);
-    }
-  }, [emitHash]);
 
   useEffect(() => {
     const fetchHypercert = async () => {
@@ -97,6 +95,36 @@ export default function HypercertDetails() {
     setActiveOrderNonce(null);
     setShowSuccessModal(true);
   }, []);
+
+  const handleConnect = async () => {
+    if (isConnecting) return;
+    
+    setIsConnecting(true);
+    try {
+      const farcasterConnector = connectors[0];
+
+      if (farcasterConnector) {
+        await connect({ connector: farcasterConnector });
+      } else {
+        // Fallback to first available connector (for testing outside Farcaster)
+        connect({ connector: connectors[1] });
+      }
+    } catch (error) {
+      console.error('Connection failed:', error);
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+  
+  const handleDisconnect = async () => {
+    try {
+      await disconnect();
+      // Clear any cached connector state
+      localStorage.removeItem('wagmi.store');
+    } catch (error) {
+      console.error('Disconnect failed:', error);
+    }
+  };
 
   if (loading) {
     return (
@@ -240,7 +268,7 @@ export default function HypercertDetails() {
                 </div>
 
                 <div className="flex flex-col space-y-4">
-                  <ConnectButton.Custom>
+                  {/* <ConnectButton.Custom>
                     {({
                       account,
                       chain,
@@ -337,7 +365,30 @@ export default function HypercertDetails() {
                         </div>
                       );
                     }}
-                  </ConnectButton.Custom>
+                  </ConnectButton.Custom> */}
+                  <div className="mb-6 flex justify-center">
+              {!isConnected ? (
+                <button
+                  onClick={handleConnect}
+                  disabled={isConnecting}
+                  className="w-full py-3 bg-gradient-to-r from-teal-500 to-cyan-600 text-white font-medium rounded-xl shadow-sm hover:from-teal-600 hover:to-cyan-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 transition-all duration-200"
+                >
+                  Connect Wallet
+                </button>
+              ) : (
+                <div className="flex flex-col space-y-3 w-full">
+                  <div className="flex items-center justify-center space-x-2 w-full py-3 bg-teal-100 text-teal-800 font-medium rounded-xl">
+                    <span>{formatAddress(address!)}</span>
+                  </div>
+                  <button
+                    onClick={() => handleDisconnect()}
+                    className="w-full py-2 bg-gray-200 text-gray-700 font-medium rounded-xl hover:bg-gray-300 transition-all duration-200"
+                  >
+                    Disconnect
+                  </button>
+                </div>
+              )}
+            </div>
 
                   <Link
                     href="/"
@@ -411,9 +462,9 @@ export default function HypercertDetails() {
               <div className="mt-4 text-sm">
                 {/* https://celo.blockscout.com/address/0x21dfd1CfD1d45801f46B0F40Aed056b064045aA2?tab=txs */}
                 <a
-                  href={`https://celo.blockscout.com/txs/${
-                    transactionHash || emitHash || ""
-                  }`}
+                  href={`https://celo.blockscout.com/address/${
+                    address || ""
+                  }?tab=txs`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="mt-3 inline-flex items-center text-green-600 hover:text-green-800 font-medium"

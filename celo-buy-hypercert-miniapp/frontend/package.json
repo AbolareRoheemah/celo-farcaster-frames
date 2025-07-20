@@ -17,6 +17,7 @@
     "@farcaster/frame-node": "^0.0.7",
     "@farcaster/frame-sdk": "^0.0.26",
     "@farcaster/frame-wagmi-connector": "^0.0.6",
+    "@farcaster/miniapp-wagmi-connector": "^1.0.0",
     "@hookform/resolvers": "^5.0.1",
     "@hypercerts-org/marketplace-sdk": "^0.6.0",
     "@hypercerts-org/sdk": "^2.8.0",

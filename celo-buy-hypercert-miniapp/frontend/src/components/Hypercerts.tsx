@@ -4,8 +4,8 @@ import Link from 'next/link';
 import { useEffect, useState } from "react";
 import sdk, { type Context } from "@farcaster/frame-sdk";
 import { getHypercerts, searchHypercerts } from "../lib/graphqlQueries";
-// import { useAccount, useChainId } from 'wagmi';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
+import { useAccount, useConnect, useDisconnect } from 'wagmi';
+// import { ConnectButton } from '@rainbow-me/rainbowkit';
 
 interface Hypercert {
   id: string;
@@ -16,8 +16,10 @@ interface Hypercert {
 }
 
 export default function Hypercerts() {
-  // const { isConnected, address } = useAccount();
-  // const chainId = useChainId();
+  const [isConnecting, setIsConnecting] = useState(false);
+  const { isConnected, address } = useAccount();
+  const { connect, connectors } = useConnect();
+  const { disconnect } = useDisconnect();
   const [hypercerts, setHypercerts] = useState<Hypercert[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSDKLoaded, setIsSDKLoaded] = useState(false);
@@ -66,6 +68,10 @@ export default function Hypercerts() {
       }
     }
   }, [currentPage]);
+
+  const formatAddress = (addr: string) => {
+    return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+  };
 
   const fetchHypercerts = async (page = currentPage) => {
     try {
@@ -120,6 +126,50 @@ export default function Hypercerts() {
       setHypercerts([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // const handleConnect = () => {
+  //   // Try Farcaster first (for when inside Farcaster)
+  //   const farcasterConnector = connectors.find(
+  //     connector => connector.id === 'farcasterFrame'
+  //   );
+    
+  //   if (farcasterConnector) {
+  //     connect({ connector: farcasterConnector });
+  //   } else {
+  //     // Fallback to first available connector (for testing outside Farcaster)
+  //     connect({ connector: connectors[0] });
+  //   }
+  // };
+
+  const handleConnect = async () => {
+    if (isConnecting) return;
+    
+    setIsConnecting(true);
+    try {
+      const farcasterConnector = connectors[0];
+
+      if (farcasterConnector) {
+        await connect({ connector: farcasterConnector });
+      } else {
+        // Fallback to first available connector (for testing outside Farcaster)
+        connect({ connector: connectors[1] });
+      }
+    } catch (error) {
+      console.error('Connection failed:', error);
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+  
+  const handleDisconnect = async () => {
+    try {
+      await disconnect();
+      // Clear any cached connector state
+      localStorage.removeItem('wagmi.store');
+    } catch (error) {
+      console.error('Disconnect failed:', error);
     }
   };
 
@@ -199,69 +249,27 @@ export default function Hypercerts() {
               Discover and invest in impact projects on Celo
             </p>
             <div className="mb-6 flex justify-center">
-            <ConnectButton.Custom>
-                    {({
-                      account,
-                      chain,
-                      openAccountModal,
-                      openChainModal,
-                      openConnectModal,
-                      mounted,
-                    }) => {
-                      const ready = mounted;
-                      const connected = ready && account && chain;
-
-                      return (
-                        <div
-                          {...(!ready && {
-                            'aria-hidden': true,
-                            style: {
-                              opacity: 0,
-                              pointerEvents: 'none',
-                              userSelect: 'none',
-                            },
-                          })}
-                          className="w-full"
-                        >
-                          {(() => {
-                            if (!connected) {
-                              return (
-                                <button
-                                  onClick={openConnectModal}
-                                  className="w-full py-3 bg-gradient-to-r from-teal-500 to-cyan-600 text-white font-medium rounded-xl shadow-sm hover:from-teal-600 hover:to-cyan-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 transition-all duration-200"
-                                >
-                                  Connect Wallet
-                                </button>
-                              );
-                            }
-
-                            if (chain.unsupported) {
-                              return (
-                                <button
-                                  onClick={openChainModal}
-                                  className="w-full py-3 bg-red-500 text-white font-medium rounded-xl shadow-sm hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200"
-                                >
-                                  Switch to Celo
-                                </button>
-                              );
-                            }
-
-                            return (
-                              <div className="flex flex-col space-y-3">
-                                <button
-                                  onClick={openAccountModal}
-                                  className="flex items-center justify-center space-x-2 w-full py-3 bg-teal-100 text-teal-800 font-medium rounded-xl hover:bg-teal-200 transition-all duration-200"
-                                >
-                                  <span>{account.displayName}</span>
-                                  <span>{account.displayBalance ? ` (${account.displayBalance})` : ''}</span>
-                                </button>
-                              </div>
-                            );
-                          })()}
-                        </div>
-                      );
-                    }}
-                  </ConnectButton.Custom>
+              {!isConnected ? (
+                <button
+                  onClick={handleConnect}
+                  disabled={isConnecting}
+                  className="w-full py-3 bg-gradient-to-r from-teal-500 to-cyan-600 text-white font-medium rounded-xl shadow-sm hover:from-teal-600 hover:to-cyan-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 transition-all duration-200"
+                >
+                  Connect Wallet
+                </button>
+              ) : (
+                <div className="flex flex-col space-y-3 w-full">
+                  <div className="flex items-center justify-center space-x-2 w-full py-3 bg-teal-100 text-teal-800 font-medium rounded-xl">
+                    <span>{formatAddress(address!)}</span>
+                  </div>
+                  <button
+                    onClick={() => handleDisconnect()}
+                    className="w-full py-2 bg-gray-200 text-gray-700 font-medium rounded-xl hover:bg-gray-300 transition-all duration-200"
+                  >
+                    Disconnect
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
