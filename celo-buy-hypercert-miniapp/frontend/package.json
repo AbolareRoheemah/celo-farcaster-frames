@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@divvi/referral-sdk": "^2.2.0",
     "@ethereumjs/tx": "^10.0.0",
     "@ethereumjs/util": "^10.0.0",
     "@farcaster/auth-kit": "^0.6.0",
@@ -51,7 +52,7 @@
   },
   "devDependencies": {
     "@types/ethereumjs-tx": "^1.0.1",
-    "@types/node": "^20",
+    "@types/node": "^20.19.9",
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "eslint": "^8",

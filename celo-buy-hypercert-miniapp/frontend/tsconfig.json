@@ -22,7 +22,7 @@
       }
     ],
     "paths": {
-      "~/*": ["frontend/src/*"]
+      "~/*": ["./frontend/src/*"]
     }
   },
   "include": ["frontend/next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],

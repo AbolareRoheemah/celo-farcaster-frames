@@ -13,7 +13,7 @@ export async function GET() {
     frame: {
       version: "1",
       name: "Celo Hypercerts Marketplace",
-      iconUrl: `${appUrl}/icon.png`,
+      iconUrl: `${appUrl}/hypercert-img-url.png`,
       homeUrl: appUrl,
       imageUrl: `${appUrl}/hypercert-img-url.png`,
       buttonTitle: "Launch Frame",

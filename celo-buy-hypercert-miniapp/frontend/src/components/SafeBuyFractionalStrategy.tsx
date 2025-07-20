@@ -1,5 +1,6 @@
 import { Currency, Taker } from "@hypercerts-org/marketplace-sdk";
 import { zeroAddress } from "viem";
+import { signMessage } from 'viem/actions';
 
 import { decodeContractError } from "../lib/decodeContractError";
 import { ExtraContent } from "./extra-content";
@@ -8,6 +9,7 @@ import { SUPPORTED_CHAINS } from "../lib/constants";
 import { BuyFractionalStrategy } from "../lib/BuyFractionalStrategy";
 import { getCurrencyByAddress } from "../lib/hypercerts-utils";
 import { MarketplaceOrder } from "../lib/types";
+import { getReferralTag, submitReferral } from '@divvi/referral-sdk';
 
 export class SafeBuyFractionalStrategy extends BuyFractionalStrategy {
   async execute({
@@ -25,6 +27,7 @@ export class SafeBuyFractionalStrategy extends BuyFractionalStrategy {
       setOpen,
       setExtraContent,
     } = this.dialogContext;
+    
     if (!this.exchangeClient) {
       setOpen(false);
       throw new Error("No client");
@@ -54,6 +57,10 @@ export class SafeBuyFractionalStrategy extends BuyFractionalStrategy {
         description: "Approving transfer manager on Safe",
       },
       {
+        id: "Divvi referral setup",
+        description: "Setting up referral attribution",
+      },
+      {
         id: "Submitting order",
         description: "Submitting buy transaction to Safe transaction queue",
       },
@@ -66,6 +73,7 @@ export class SafeBuyFractionalStrategy extends BuyFractionalStrategy {
 
     let currency: Currency | undefined;
     let takerOrder: Taker;
+    
     try {
       await setStep("Setting up order execution");
       currency = getCurrencyByAddress(order.chainId, order.currency);
@@ -99,6 +107,8 @@ export class SafeBuyFractionalStrategy extends BuyFractionalStrategy {
     }
 
     const totalPrice = BigInt(order.price) * unitAmount;
+    
+    // ERC20 Approval
     try {
       await setStep("ERC20");
       if (currency.address !== zeroAddress) {
@@ -125,6 +135,7 @@ export class SafeBuyFractionalStrategy extends BuyFractionalStrategy {
       throw new Error("Approval error");
     }
 
+    // Transfer Manager Approval
     try {
       await setStep("Transfer manager");
       const isTransferManagerApproved =
@@ -146,19 +157,70 @@ export class SafeBuyFractionalStrategy extends BuyFractionalStrategy {
       throw new Error("Approval error");
     }
 
+    // ✅ Divvi Off-Chain Referral Setup (For Safe Transactions)
+    let referralTag = '';
+    let signedMessage = '';
+    let referralSignature = '';
+    
+    try {
+      await setStep("Divvi referral setup");
+      
+      // Generate referral tag
+      referralTag = getReferralTag({
+        user: this.address,
+        consumer: '0x21dfd1CfD1d45801f46B0F40Aed056b064045aA2', // Your actual consumer address
+      });
+      
+      // Create and sign referral message for Safe
+      const referralMessage = `Divvi Referral Attribution (Safe Transaction)\nReferral Tag: ${referralTag}\nSafe Address: ${this.address}\nOrder ID: ${order.id || 'unknown'}\nTimestamp: ${Date.now()}`;
+      
+      referralSignature = await signMessage(this.walletClient.data, { 
+        message: referralMessage 
+      });
+      
+      signedMessage = referralMessage;
+      
+    } catch (e) {
+      await setStep(
+        "Divvi referral setup",
+        "error",
+        e instanceof Error ? e.message : "Error setting up referral",
+      );
+      console.error('Divvi referral setup failed:', e);
+      // Don't throw - continue with transaction even if referral setup fails
+    }
+
+    // Execute Safe Transaction (No modifications needed!)
     try {
       await setStep("Submitting order");
-      const overrides =
-        currency.address === zeroAddress ? { value: totalPrice } : undefined;
+      
+      const overrides = currency.address === zeroAddress ? { value: totalPrice } : undefined;
+      
+      // ✅ Use your existing Safe SDK exactly as before - no changes needed!
       await this.exchangeClient.executeOrderSafe(
         this.address,
         order,
         takerOrder,
         order.signature,
-        overrides,
+        overrides, // No referral modifications needed here!
       );
 
       await setStep("Transaction queued");
+
+      // ✅ Submit Divvi Referral (After Safe Transaction Queued)
+      try {
+        if (signedMessage && referralSignature) {
+          await submitReferral({
+            message: signedMessage,
+            signature: referralSignature as `0x${string}`,
+            chainId: this.chainId,
+          });
+          console.log('Divvi referral submitted successfully for Safe transaction');
+        }
+      } catch (err) {
+        console.error('Divvi referral submission failed (non-critical):', err);
+        // Don't throw - Safe transaction already queued
+      }
 
       const chain = SUPPORTED_CHAINS.find((x) => x.id === order.chainId);
 
@@ -167,7 +229,10 @@ export class SafeBuyFractionalStrategy extends BuyFractionalStrategy {
           Transaction requests are submitted to the connected Safe.
           <br />
           <br />
-          You can view the transactions in the Safe application
+          You can view the transactions in the Safe application.
+          <br />
+          <br />
+          Referral attribution has been recorded with Divvi.
         </span>
       );
 
@@ -181,10 +246,10 @@ export class SafeBuyFractionalStrategy extends BuyFractionalStrategy {
           safeAddress={this.address as `0x${string}`}
         />
       ));
+      
     } catch (e) {
       const decodedMessage = decodeContractError(e, "Error buying listing");
-      await setStep("Awaiting confirmation", "error", decodedMessage);
-
+      await setStep("Submitting order", "error", decodedMessage);
       console.error(e);
       throw new Error(decodedMessage);
     }

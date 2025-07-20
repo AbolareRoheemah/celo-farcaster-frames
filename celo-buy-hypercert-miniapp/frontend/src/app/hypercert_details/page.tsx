@@ -409,8 +409,9 @@ export default function HypercertDetails() {
               </div>
 
               <div className="mt-4 text-sm">
+                {/* https://celo.blockscout.com/address/0x21dfd1CfD1d45801f46B0F40Aed056b064045aA2?tab=txs */}
                 <a
-                  href={`https://celo.blockscout.com/tx/${
+                  href={`https://celo.blockscout.com/txs/${
                     transactionHash || emitHash || ""
                   }`}
                   target="_blank"
