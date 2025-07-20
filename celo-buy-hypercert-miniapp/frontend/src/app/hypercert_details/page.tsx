@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { ConnectButton } from "@rainbow-me/rainbowkit";
+// import { ConnectButton } from "@rainbow-me/rainbowkit";
 import sdk, { type Context } from "@farcaster/frame-sdk";
 import Link from "next/link";
 import { BuyOrderDialog } from "../../components/buy-order-dialog";
@@ -34,7 +34,6 @@ export default function HypercertDetails() {
   // const [transactionHash, setTransactionHash] = useState<string | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const address = useAccount();
 
   useEffect(() => {
     const load = async () => {
@@ -124,6 +123,10 @@ export default function HypercertDetails() {
     } catch (error) {
       console.error('Disconnect failed:', error);
     }
+  };
+
+  const formatAddress = (addr: string) => {
+    return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
   };
 
   if (loading) {
@@ -268,127 +271,63 @@ export default function HypercertDetails() {
                 </div>
 
                 <div className="flex flex-col space-y-4">
-                  {/* <ConnectButton.Custom>
-                    {({
-                      account,
-                      chain,
-                      openAccountModal,
-                      openChainModal,
-                      openConnectModal,
-                      mounted,
-                    }) => {
-                      const ready = mounted;
-                      const connected = ready && account && chain;
-
-                      return (
-                        <div
-                          {...(!ready && {
-                            "aria-hidden": true,
-                            style: {
-                              opacity: 0,
-                              pointerEvents: "none",
-                              userSelect: "none",
-                            },
-                          })}
-                          className="w-full"
-                        >
-                          {(() => {
-                            if (!connected) {
-                              return (
-                                <button
-                                  onClick={openConnectModal}
-                                  className="w-full py-3 bg-gradient-to-r from-teal-500 to-cyan-600 text-white font-medium rounded-xl shadow-sm hover:from-teal-600 hover:to-cyan-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 transition-all duration-200"
-                                >
-                                  Connect Wallet
-                                </button>
-                              );
-                            }
-
-                            if (chain.unsupported) {
-                              return (
-                                <button
-                                  onClick={openChainModal}
-                                  className="w-full py-3 bg-red-500 text-white font-medium rounded-xl shadow-sm hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200"
-                                >
-                                  Switch to Celo
-                                </button>
-                              );
-                            }
-
-                            return (
-                              <div className="flex flex-col space-y-3">
-                                <button
-                                  onClick={openAccountModal}
-                                  className="flex items-center justify-center space-x-2 w-full py-3 bg-teal-100 text-teal-800 font-medium rounded-xl hover:bg-teal-200 transition-all duration-200"
-                                >
-                                  <span>{account.displayName}</span>
-                                  <span>
-                                    {account.displayBalance
-                                      ? ` (${account.displayBalance})`
-                                      : ""}
-                                  </span>
-                                </button>
-                                <BuyOrderDialog
-                                  order={
-                                    (hypercert?.orders?.data?.[0] as OrderFragment) ||
-                                    []
-                                  }
-                                  hypercert={hypercert as HypercertFull}
-                                  isProcessing={isProcessing && !errorMessage}
-                                  onBuyOrder={handleBuyOrder}
-                                  onComplete={handleBuyOrderComplete}
-                                  trigger={
-                                    <button
-                                      className={`w-full py-3 font-medium rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 transition-all duration-200 ${
-                                        hypercert?.orders?.totalUnitsForSale
-                                          ? "bg-gradient-to-r from-teal-500 to-cyan-600 text-white hover:from-teal-600 hover:to-cyan-700"
-                                          : "bg-gray-300 text-gray-600 cursor-not-allowed"
-                                      }`}
-                                      disabled={!hypercert?.orders?.totalUnitsForSale}
-                                    >
-                                      {isProcessing && !errorMessage ? (
-                                        <div className="flex items-center justify-center">
-                                          <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                                          Processing...
-                                        </div>
-                                      ) : hypercert?.orders?.totalUnitsForSale ? (
-                                        "Buy Fractions"
-                                      ) : (
-                                        "Not Available"
-                                      )}
-                                    </button>
-                                  }
-                                />
-                              </div>
-                            );
-                          })()}
-                        </div>
-                      );
-                    }}
-                  </ConnectButton.Custom> */}
                   <div className="mb-6 flex justify-center">
-              {!isConnected ? (
-                <button
-                  onClick={handleConnect}
-                  disabled={isConnecting}
-                  className="w-full py-3 bg-gradient-to-r from-teal-500 to-cyan-600 text-white font-medium rounded-xl shadow-sm hover:from-teal-600 hover:to-cyan-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 transition-all duration-200"
-                >
-                  Connect Wallet
-                </button>
-              ) : (
-                <div className="flex flex-col space-y-3 w-full">
-                  <div className="flex items-center justify-center space-x-2 w-full py-3 bg-teal-100 text-teal-800 font-medium rounded-xl">
-                    <span>{formatAddress(address!)}</span>
+                    {!isConnected ? (
+                      <button
+                        onClick={handleConnect}
+                        disabled={isConnecting}
+                        className="w-full py-3 bg-gradient-to-r from-teal-500 to-cyan-600 text-white font-medium rounded-xl shadow-sm hover:from-teal-600 hover:to-cyan-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 transition-all duration-200"
+                      >
+                        {isConnecting ? "Connecting..." : "Connect Wallet"}
+                      </button>
+                    ) : (
+                      <div className="flex flex-col space-y-3 w-full">
+                        <div className="flex items-center justify-center space-x-2 w-full py-3 bg-teal-100 text-teal-800 font-medium rounded-xl">
+                          <span>
+                            {address ? formatAddress(address) : ""}
+                          </span>
+                        </div>
+                        <button
+                          onClick={handleDisconnect}
+                          className="w-full py-2 bg-gray-200 text-gray-700 font-medium rounded-xl hover:bg-gray-300 transition-all duration-200"
+                        >
+                          Disconnect
+                        </button>
+                        <BuyOrderDialog
+                          order={
+                            (hypercert?.orders?.data?.[0] as OrderFragment) ||
+                            []
+                          }
+                          hypercert={hypercert as HypercertFull}
+                          isProcessing={isProcessing && !errorMessage}
+                          onBuyOrder={handleBuyOrder}
+                          onComplete={handleBuyOrderComplete}
+                          trigger={
+                            <button
+                              className={`w-full py-3 font-medium rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 transition-all duration-200 ${
+                                hypercert?.orders?.totalUnitsForSale
+                                  ? "bg-gradient-to-r from-teal-500 to-cyan-600 text-white hover:from-teal-600 hover:to-cyan-700"
+                                  : "bg-gray-300 text-gray-600 cursor-not-allowed"
+                              }`}
+                              disabled={!hypercert?.orders?.totalUnitsForSale}
+                            >
+                              {isProcessing && !errorMessage ? (
+                                <div className="flex items-center justify-center">
+                                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                                  Processing...
+                                </div>
+                              ) : hypercert?.orders?.totalUnitsForSale ? (
+                                "Buy Fractions"
+                              ) : (
+                                "Not Available"
+                              )}
+                            </button>
+                          }
+                        />
+                      </div>
+                    )}
                   </div>
-                  <button
-                    onClick={() => handleDisconnect()}
-                    className="w-full py-2 bg-gray-200 text-gray-700 font-medium rounded-xl hover:bg-gray-300 transition-all duration-200"
-                  >
-                    Disconnect
-                  </button>
-                </div>
-              )}
-            </div>
+                  
 
                   <Link
                     href="/"

@@ -21,7 +21,7 @@ export const config = createConfig({
   connectors: [
     miniAppConnector(),
     injected(),
-    walletConnect({ projectId })
+    walletConnect({projectId})
   ],
 });
 
