@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-// import { ConnectButton } from "@rainbow-me/rainbowkit";
 import sdk, { type Context } from "@farcaster/frame-sdk";
 import Link from "next/link";
 import { BuyOrderDialog } from "../../components/buy-order-dialog";
@@ -11,13 +10,12 @@ import { HypercertFull } from "../../lib/hypercert-full.fragment";
 import { useToast } from "../../hooks/use-toast";
 import { getHypercert } from "../../lib/getHypercert";
 import { useStore } from "../../lib/account-store";
-import { useAccount, useConnect, useDisconnect } from 'wagmi';
+import { useAccount, useConnect, useBalance } from 'wagmi';
 
 export default function HypercertDetails() {
   const [isConnecting, setIsConnecting] = useState(false);
   const { isConnected, address } = useAccount();
   const { connect, connectors } = useConnect();
-  const { disconnect } = useDisconnect();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const emitError = useStore((state: any) => state.error);
   const { toast } = useToast();
@@ -31,9 +29,14 @@ export default function HypercertDetails() {
   const isProcessing = hypercert?.orders?.data?.length
     ? hypercert?.orders?.data?.[0]?.orderNonce === activeOrderNonce
     : false;
-  // const [transactionHash, setTransactionHash] = useState<string | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Fetch wallet balance (CELO)
+  const { data: balanceData, isLoading: isBalanceLoading } = useBalance({
+    address: address,
+    chainId: 42220,
+  });
 
   useEffect(() => {
     const load = async () => {
@@ -79,6 +82,29 @@ export default function HypercertDetails() {
     fetchHypercert();
   }, [id]);
 
+  // Automatically connect wallet on mount if not connected
+  useEffect(() => {
+    if (!isConnected && connectors.length > 0 && !isConnecting) {
+      setIsConnecting(true);
+      const connectWallet = async () => {
+        try {
+          const farcasterConnector = connectors[0];
+          if (farcasterConnector) {
+            await connect({ connector: farcasterConnector });
+          } else if (connectors[1]) {
+            await connect({ connector: connectors[1] });
+          }
+        } catch (error) {
+          console.error('Auto-connection failed:', error);
+        } finally {
+          setIsConnecting(false);
+        }
+      };
+      connectWallet();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isConnected, connectors]);
+
   const handleBuyOrder = useCallback(
     (orderNonce: string) => {
       setActiveOrderNonce(orderNonce);
@@ -94,36 +120,6 @@ export default function HypercertDetails() {
     setActiveOrderNonce(null);
     setShowSuccessModal(true);
   }, []);
-
-  const handleConnect = async () => {
-    if (isConnecting) return;
-    
-    setIsConnecting(true);
-    try {
-      const farcasterConnector = connectors[0];
-
-      if (farcasterConnector) {
-        await connect({ connector: farcasterConnector });
-      } else {
-        // Fallback to first available connector (for testing outside Farcaster)
-        connect({ connector: connectors[1] });
-      }
-    } catch (error) {
-      console.error('Connection failed:', error);
-    } finally {
-      setIsConnecting(false);
-    }
-  };
-  
-  const handleDisconnect = async () => {
-    try {
-      await disconnect();
-      // Clear any cached connector state
-      localStorage.removeItem('wagmi.store');
-    } catch (error) {
-      console.error('Disconnect failed:', error);
-    }
-  };
 
   const formatAddress = (addr: string) => {
     return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
@@ -262,7 +258,7 @@ export default function HypercertDetails() {
                     <div className="text-gray-700 font-medium">
                       Available fractions:
                     </div>
-                    <div className="font-bold text-teal-700">
+                    <div className="font-bold text-teal-700 truncate max-w-[150px] sm:max-w-[200px] text-right">
                       {hypercert?.orders?.totalUnitsForSale
                         ? `${hypercert.orders.totalUnitsForSale}/${hypercert.units}`
                         : `0/${hypercert?.units || 0}`}
@@ -274,25 +270,25 @@ export default function HypercertDetails() {
                   <div className="mb-6 flex justify-center">
                     {!isConnected ? (
                       <button
-                        onClick={handleConnect}
-                        disabled={isConnecting}
-                        className="w-full py-3 bg-gradient-to-r from-teal-500 to-cyan-600 text-white font-medium rounded-xl shadow-sm hover:from-teal-600 hover:to-cyan-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 transition-all duration-200"
+                        disabled
+                        className="w-full py-3 bg-gradient-to-r from-teal-500 to-cyan-600 text-white font-medium rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 transition-all duration-200 opacity-60 cursor-not-allowed"
                       >
-                        {isConnecting ? "Connecting..." : "Connect Wallet"}
+                        {isConnecting ? "Connecting..." : "Connecting..."}
                       </button>
                     ) : (
                       <div className="flex flex-col space-y-3 w-full">
-                        <div className="flex items-center justify-center space-x-2 w-full py-3 bg-teal-100 text-teal-800 font-medium rounded-xl">
+                        <div className="flex flex-col items-center justify-center w-full py-3 bg-teal-100 text-teal-800 font-medium rounded-xl">
                           <span>
                             {address ? formatAddress(address) : ""}
                           </span>
+                          <span className="text-xs text-teal-700 mt-1">
+                            {isBalanceLoading
+                              ? "Loading balance..."
+                              : balanceData
+                              ? `(${Number(balanceData.formatted).toFixed(4)} CELO)`
+                              : "--"}
+                          </span>
                         </div>
-                        <button
-                          onClick={handleDisconnect}
-                          className="w-full py-2 bg-gray-200 text-gray-700 font-medium rounded-xl hover:bg-gray-300 transition-all duration-200"
-                        >
-                          Disconnect
-                        </button>
                         <BuyOrderDialog
                           order={
                             (hypercert?.orders?.data?.[0] as OrderFragment) ||

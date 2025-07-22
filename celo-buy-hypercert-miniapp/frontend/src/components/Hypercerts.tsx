@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from "react";
 import sdk, { type Context } from "@farcaster/frame-sdk";
 import { getHypercerts, searchHypercerts } from "../lib/graphqlQueries";
-import { useAccount, useConnect, useDisconnect } from 'wagmi';
+import { useAccount, useConnect, useBalance } from 'wagmi';
 // import { ConnectButton } from '@rainbow-me/rainbowkit';
 
 interface Hypercert {
@@ -19,7 +19,6 @@ export default function Hypercerts() {
   const [isConnecting, setIsConnecting] = useState(false);
   const { isConnected, address } = useAccount();
   const { connect, connectors } = useConnect();
-  const { disconnect } = useDisconnect();
   const [hypercerts, setHypercerts] = useState<Hypercert[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSDKLoaded, setIsSDKLoaded] = useState(false);
@@ -33,6 +32,12 @@ export default function Hypercerts() {
   const [isSearching, setIsSearching] = useState(false);
   // const { client } = useHypercertClient();
 
+  // Show connected wallet balance
+  // Use wagmi's useBalance hook for CELO (Celo mainnet chainId: 42220)
+  const { data: balanceData, isLoading: isBalanceLoading } = useBalance({
+    address: address,
+    chainId: 42220, 
+  });
 
   useEffect(() => {
     const load = async () => {
@@ -51,6 +56,21 @@ export default function Hypercerts() {
       };
     }
   }, [isSDKLoaded]);
+
+  // Automatically connect wallet on mount if not connected
+  useEffect(() => {
+    if (isSDKLoaded && !isConnected && connectors.length > 0 && !isConnecting) {
+      setIsConnecting(true);
+      const farcasterConnector = connectors[0];
+      if (farcasterConnector) {
+        Promise.resolve(connect({ connector: farcasterConnector })).finally(() => setIsConnecting(false));
+      } else if (connectors[1]) {
+        Promise.resolve(connect({ connector: connectors[1] })).finally(() => setIsConnecting(false));
+      } else {
+        setIsConnecting(false);
+      }
+    }
+  }, [isSDKLoaded, isConnected, connectors, connect, isConnecting]);
 
   // Initial data fetch when component mounts
   useEffect(() => {
@@ -129,49 +149,7 @@ export default function Hypercerts() {
     }
   };
 
-  // const handleConnect = () => {
-  //   // Try Farcaster first (for when inside Farcaster)
-  //   const farcasterConnector = connectors.find(
-  //     connector => connector.id === 'farcasterFrame'
-  //   );
-    
-  //   if (farcasterConnector) {
-  //     connect({ connector: farcasterConnector });
-  //   } else {
-  //     // Fallback to first available connector (for testing outside Farcaster)
-  //     connect({ connector: connectors[0] });
-  //   }
-  // };
-
-  const handleConnect = async () => {
-    if (isConnecting) return;
-    
-    setIsConnecting(true);
-    try {
-      const farcasterConnector = connectors[0];
-
-      if (farcasterConnector) {
-        await connect({ connector: farcasterConnector });
-      } else {
-        // Fallback to first available connector (for testing outside Farcaster)
-        connect({ connector: connectors[1] });
-      }
-    } catch (error) {
-      console.error('Connection failed:', error);
-    } finally {
-      setIsConnecting(false);
-    }
-  };
-  
-  const handleDisconnect = async () => {
-    try {
-      await disconnect();
-      // Clear any cached connector state
-      localStorage.removeItem('wagmi.store');
-    } catch (error) {
-      console.error('Disconnect failed:', error);
-    }
-  };
+  // No manual connect/disconnect handlers needed
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -249,26 +227,32 @@ export default function Hypercerts() {
               Discover and invest in impact projects on Celo
             </p>
             <div className="mb-6 flex justify-center">
-              {!isConnected ? (
-                <button
-                  onClick={handleConnect}
-                  disabled={isConnecting}
-                  className="w-full py-3 bg-gradient-to-r from-teal-500 to-cyan-600 text-white font-medium rounded-xl shadow-sm hover:from-teal-600 hover:to-cyan-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 transition-all duration-200"
-                >
-                  Connect Wallet
-                </button>
-              ) : (
+              {isConnected ? (
                 <div className="flex flex-col space-y-3 w-full">
                   <div className="flex items-center justify-center space-x-2 w-full py-3 bg-teal-100 text-teal-800 font-medium rounded-xl">
                     <span>{formatAddress(address!)}</span>
+                    {/* Show wallet balance */}
+                    <span className="ml-3 flex items-center text-teal-700 text-sm font-normal">
+                      {isBalanceLoading ? (
+                        <span className="animate-pulse">Loading balance...</span>
+                      ) : balanceData ? (
+                        <>
+                          <span className="font-semibold">({parseFloat(balanceData.formatted).toFixed(3)}</span>
+                          <span className="ml-1">{balanceData.symbol})</span>
+                        </>
+                      ) : (
+                        <span>Balance unavailable</span>
+                      )}
+                    </span>
                   </div>
-                  <button
-                    onClick={() => handleDisconnect()}
-                    className="w-full py-2 bg-gray-200 text-gray-700 font-medium rounded-xl hover:bg-gray-300 transition-all duration-200"
-                  >
-                    Disconnect
-                  </button>
                 </div>
+              ) : (
+                <button
+                  disabled
+                  className="w-full py-3 bg-gradient-to-r from-teal-500 to-cyan-600 text-white font-medium rounded-xl shadow-sm opacity-60 cursor-not-allowed"
+                >
+                  Connecting Wallet...
+                </button>
               )}
             </div>
           </div>
