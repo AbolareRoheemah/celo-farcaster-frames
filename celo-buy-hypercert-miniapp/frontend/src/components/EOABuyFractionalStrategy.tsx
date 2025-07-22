@@ -250,7 +250,7 @@ export class EOABuyFractionalStrategy extends BuyFractionalStrategy {
         // Don't throw - transaction already succeeded
       }
       
-      useStore.getState().emitHash(receipt);
+      useStore.getState().emitHash(receipt.transactionHash);
       const chain = SUPPORTED_CHAINS.find((x) => x.id === order.chainId);
       await setStep("Awaiting confirmation", "completed");
       
@@ -281,6 +281,10 @@ export class EOABuyFractionalStrategy extends BuyFractionalStrategy {
       const decodedMessage = decodeContractError(e, "Error buying listing");
       await setStep("Awaiting confirmation", "error", decodedMessage);
       console.error(e);
+      
+      // Emit error to store so UI can handle it
+      useStore.getState().emitError(e);
+      
       throw new Error(decodedMessage);
     }
   }
