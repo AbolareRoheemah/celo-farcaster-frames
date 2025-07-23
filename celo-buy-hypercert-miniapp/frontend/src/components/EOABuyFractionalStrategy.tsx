@@ -183,28 +183,16 @@ export class EOABuyFractionalStrategy extends BuyFractionalStrategy {
             if (receipt.status !== 'success') {
               throw new Error("Approval transaction failed");
             }
-          } catch (approvalError) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          } catch (approvalError: any) {
             // If approval fails, it might be because we already have sufficient allowance
             // In Farcaster, we can't check, so we'll proceed and let the main transaction fail if needed
-
-            let errorMessage = "";
-            if (approvalError instanceof Error) {
-              errorMessage = approvalError.message;
-            } else if (typeof approvalError === "object" && approvalError !== null && "message" in approvalError) {
-              // @ts-ignore
-              errorMessage = approvalError.message;
-            } else {
-              errorMessage = String(approvalError);
-            }
-
-            console.log("Approval failed, might already have sufficient allowance:", errorMessage);
-
+            console.log("Approval failed, might already have sufficient allowance:", approvalError.message);
+            
             // Only throw if it's not an allowance-related error
-            if (
-              !errorMessage.includes('allowance') &&
-              !errorMessage.includes('approved') &&
-              !errorMessage.includes('insufficient')
-            ) {
+            if (!approvalError.message.includes('allowance') && 
+                !approvalError.message.includes('approved') &&
+                !approvalError.message.includes('insufficient')) {
               throw approvalError;
             }
           }
