@@ -28,24 +28,6 @@ const calculateBigIntPercentage = (
   return unCorrected / precision;
 };
 
-const isFarcasterEnvironment = () => {
-  if (typeof window === 'undefined') return false;
-  
-  const userAgent = navigator.userAgent.toLowerCase();
-  const isFarcasterApp = userAgent.includes('farcaster') || 
-                        window.location.hostname.includes('warpcast') ||
-                        window.parent !== window; // Often true in frames
-  
-  console.log('Environment detection:', {
-    userAgent,
-    hostname: window.location.hostname,
-    isFrame: window.parent !== window,
-    isFarcasterApp
-  });
-  
-  return isFarcasterApp;
-};
-
 export class EOABuyFractionalStrategy extends BuyFractionalStrategy {
   async execute({
     order,
@@ -81,9 +63,6 @@ export class EOABuyFractionalStrategy extends BuyFractionalStrategy {
       this.dialogContext.setOpen(false);
       throw new Error("No wallet client data");
     }
-
-    const isInFarcaster = isFarcasterEnvironment();
-    console.log('Detected Farcaster environment:', isInFarcaster);
 
     setSteps([
       {
@@ -154,187 +133,51 @@ export class EOABuyFractionalStrategy extends BuyFractionalStrategy {
     try {
       await setStep("ERC20");
       if (currency.address !== zeroAddress) {
-        console.log("Handling ERC20 approval for currency:", currency.address);
-        
-        if (isInFarcaster) {
-          // In Farcaster, skip allowance check and directly attempt approval
-          console.log("Farcaster detected: Skipping allowance check, attempting direct approval");
-          
-          try {
-            // Always attempt approval in Farcaster since we can't check allowance
-            const approveTx = await this.exchangeClient.approveErc20(
-              order.currency,
-              totalPrice,
-              {
-                gasLimit: BigInt(100000), // Explicit gas for Farcaster
-              }
-            );
+        const currentAllowance = await this.getERC20Allowance(
+          order.currency as `0x${string}`,
+        );
 
-            console.log("Approval transaction sent:", approveTx.hash);
-            
-            const receipt = await waitForTransactionReceipt(this.walletClient.data, {
-              hash: approveTx.hash as `0x${string}`,
-              timeout: 120000,
-              pollingInterval: 2000,
-            });
-            
-            console.log("Approval confirmed:", receipt.status);
-            
-            if (receipt.status !== 'success') {
-              throw new Error("Approval transaction failed");
-            }
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          } catch (approvalError: any) {
-            // If approval fails, it might be because we already have sufficient allowance
-            // In Farcaster, we can't check, so we'll proceed and let the main transaction fail if needed
-            console.log("Approval failed, might already have sufficient allowance:", approvalError.message);
-            
-            // Only throw if it's not an allowance-related error
-            if (!approvalError.message.includes('allowance') && 
-                !approvalError.message.includes('approved') &&
-                !approvalError.message.includes('insufficient')) {
-              throw approvalError;
-            }
-          }
-        } else {
-          // Regular web environment - use normal allowance check
-          console.log("Regular web environment: Checking allowance");
-          
-          const currentAllowance = await this.getERC20Allowance(
-            order.currency as `0x${string}`,
+        if (currentAllowance < totalPrice) {
+          const approveTx = await this.exchangeClient.approveErc20(
+            order.currency,
+            totalPrice,
           );
-
-          console.log("Current allowance:", currentAllowance.toString());
-          console.log("Required amount:", totalPrice.toString());
-
-          if (currentAllowance < totalPrice) {
-            console.log("Approval needed, requesting approval...");
-            
-            const approveTx = await this.exchangeClient.approveErc20(
-              order.currency,
-              totalPrice,
-            );
-
-            console.log("Approval transaction sent:", approveTx.hash);
-            
-            const receipt = await waitForTransactionReceipt(this.walletClient.data, {
-              hash: approveTx.hash as `0x${string}`,
-              timeout: 60000,
-            });
-            
-            if (receipt.status !== 'success') {
-              throw new Error("Approval transaction failed");
-            }
-          } else {
-            console.log("Sufficient allowance already exists");
-          }
+          await waitForTransactionReceipt(this.walletClient.data, {
+            hash: approveTx.hash as `0x${string}`,
+          });
         }
       }
     } catch (e) {
-      console.error("ERC20 approval error details:", e);
-
-      let errorMessage = "Approval error";
-      // Type guard for Error
-      const err = e instanceof Error ? e : new Error(String(e));
-      if (err.message.includes("insufficient funds")) {
-        errorMessage = "Insufficient funds for approval. Please ensure you have enough ETH for gas fees.";
-      } else if (err.message.includes("user rejected") || err.message.includes("User rejected")) {
-        errorMessage = "Approval transaction was rejected. Please try again and confirm the transaction.";
-      } else if (err.message.includes("does not support")) {
-        errorMessage = "Wallet compatibility issue. Please try opening this page in a regular browser.";
-      } else {
-        errorMessage = `Approval failed: ${err.message}`;
-      }
-
-      await setStep("ERC20", "error", errorMessage);
-      throw new Error(errorMessage);
+      await setStep(
+        "ERC20",
+        "error",
+        e instanceof Error ? e.message : "Approval error",
+      );
+      console.error(e);
+      throw new Error("Approval error");
     }
-
 
     // Transfer Manager Approval
     try {
       await setStep("Transfer manager");
-
-      if (isInFarcaster) {
-        // In Farcaster, skip the check and directly attempt approval
-        console.log("Farcaster detected: Attempting direct transfer manager approval");
-
-        try {
-          const transferManagerApprove = await this.exchangeClient
-            .grantTransferManagerApproval()
-            .call();
-
-          console.log("Transfer manager approval sent:", transferManagerApprove.hash);
-
-          const receipt = await waitForTransactionReceipt(this.walletClient.data, {
-            hash: transferManagerApprove.hash as `0x${string}`,
-            timeout: 120000,
-          });
-
-          if (receipt.status !== 'success') {
-            throw new Error("Transfer manager approval failed");
-          }
-        } catch (transferError) {
-          // Similar to ERC20, might already be approved
-          const err =
-            transferError instanceof Error
-              ? transferError
-              : new Error(String(transferError));
-          console.log(
-            "Transfer manager approval failed, might already be approved:",
-            err.message,
-          );
-
-          if (
-            !err.message.includes('approved') &&
-            !err.message.includes('already')
-          ) {
-            throw err;
-          }
-        }
-      } else {
-        // Regular web environment
-        const isTransferManagerApproved =
-          await this.exchangeClient.isTransferManagerApproved();
-
-        console.log("Transfer manager approved:", isTransferManagerApproved);
-
-        if (!isTransferManagerApproved) {
-          console.log("Transfer manager approval needed...");
-
-          const transferManagerApprove = await this.exchangeClient
-            .grantTransferManagerApproval()
-            .call();
-
-          console.log("Transfer manager approval sent:", transferManagerApprove.hash);
-
-          const receipt = await waitForTransactionReceipt(this.walletClient.data, {
-            hash: transferManagerApprove.hash as `0x${string}`,
-            timeout: 60000,
-          });
-
-          if (receipt.status !== 'success') {
-            throw new Error("Transfer manager approval failed");
-          }
-        }
+      const isTransferManagerApproved =
+        await this.exchangeClient.isTransferManagerApproved();
+      if (!isTransferManagerApproved) {
+        const transferManagerApprove = await this.exchangeClient
+          .grantTransferManagerApproval()
+          .call();
+        await waitForTransactionReceipt(this.walletClient.data, {
+          hash: transferManagerApprove.hash as `0x${string}`,
+        });
       }
     } catch (e) {
-      console.error("Transfer manager approval error:", e);
-
-      let errorMessage = "Error approving transfer manager";
-      const err = e instanceof Error ? e : new Error(String(e));
-      if (err.message.includes("user rejected")) {
-        errorMessage =
-          "Transfer manager approval was rejected. This is required to complete the purchase.";
-      } else if (err.message.includes("does not support")) {
-        errorMessage =
-          "Wallet compatibility issue with transfer manager. Please try in a regular browser.";
-      } else {
-        errorMessage = `Transfer manager approval failed: ${err.message}`;
-      }
-
-      await setStep("Transfer manager", "error", errorMessage);
-      throw new Error(errorMessage);
+      await setStep(
+        "Transfer manager",
+        "error",
+        e instanceof Error ? e.message : "Error approving transfer manager",
+      );
+      console.error(e);
+      throw new Error("Approval error");
     }
 
     // ✅ Divvi Off-Chain Referral Setup (Before Transaction)
